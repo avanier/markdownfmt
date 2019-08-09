@@ -45,14 +45,22 @@ func isMarkdownFile(f os.FileInfo) bool {
 func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error {
 	if in == nil {
 		f, err := os.Open(filename)
+
 		if err != nil {
 			return err
 		}
+
 		defer f.Close()
 		in = f
 	}
 
-	src, err := ioutil.ReadAll(in)
+	// parse the file with hugo/parser to extract front matter
+	page, err := parser.ReadFrom(in)
+	if err != nil {
+		return err
+	}
+
+	src, err := markdown.Process(filename, page.Content(), nil)
 	if err != nil {
 		return err
 	}
@@ -60,29 +68,43 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 	isTerminal := func() bool {
 		return terminal.IsTerminal(int(os.Stdout.Fd())) && os.Getenv("TERM") != "dumb"
 	}
+
+	// If we have front matter, insert a newline to separate the front matter
+	// from the markdown content.
+	sep := ""
+	if len(page.FrontMatter()) > 0 {
+		sep = "\n"
+	}
+
 	res, err := markdown.Process(filename, src, &markdown.Options{
 		Terminal: !*list && !*write && !*doDiff && isTerminal(),
 	})
+
 	if err != nil {
 		return err
 	}
 
 	if !bytes.Equal(src, res) {
+
 		// formatting has changed
 		if *list {
 			fmt.Fprintln(out, filename)
 		}
+
 		if *write {
 			err = ioutil.WriteFile(filename, res, 0)
 			if err != nil {
 				return err
 			}
 		}
+
 		if *doDiff {
 			data, err := diff(src, res)
+
 			if err != nil {
 				return fmt.Errorf("computing diff: %s", err)
 			}
+
 			fmt.Printf("diff %s markdownfmt/%s\n", filename, filename)
 			out.Write(data)
 		}
@@ -96,12 +118,15 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 }
 
 func visitFile(path string, f os.FileInfo, err error) error {
+
 	if err == nil && isMarkdownFile(f) {
 		err = processFile(path, nil, os.Stdout, false)
 	}
+
 	if err != nil {
 		report(err)
 	}
+
 	return nil
 }
 
@@ -113,7 +138,9 @@ func main() {
 	// call markdownfmtMain in a separate function
 	// so that it can use defer and have them
 	// run before the exit.
+
 	markdownfmtMain()
+
 	os.Exit(exitCode)
 }
 
@@ -122,14 +149,17 @@ func markdownfmtMain() {
 	flag.Parse()
 
 	if flag.NArg() == 0 {
+
 		if err := processFile("<standard input>", os.Stdin, os.Stdout, true); err != nil {
 			report(err)
 		}
+
 		return
 	}
 
 	for i := 0; i < flag.NArg(); i++ {
 		path := flag.Arg(i)
+
 		switch dir, err := os.Stat(path); {
 		case err != nil:
 			report(err)
@@ -145,27 +175,35 @@ func markdownfmtMain() {
 
 func diff(b1, b2 []byte) (data []byte, err error) {
 	f1, err := ioutil.TempFile("", "markdownfmt")
+
 	if err != nil {
 		return
 	}
+
 	defer os.Remove(f1.Name())
+
 	defer f1.Close()
 
 	f2, err := ioutil.TempFile("", "markdownfmt")
+
 	if err != nil {
 		return
 	}
+
 	defer os.Remove(f2.Name())
+
 	defer f2.Close()
 
 	f1.Write(b1)
 	f2.Write(b2)
 
 	data, err = exec.Command("diff", "-u", f1.Name(), f2.Name()).CombinedOutput()
+
 	if len(data) > 0 {
 		// diff exits with a non-zero status when the files don't match.
 		// Ignore that failure as long as we get output.
 		err = nil
 	}
+
 	return
 }

@@ -85,19 +85,24 @@ var updateFlag = flag.Bool("update", false, "Update golden files.")
 
 func Test(t *testing.T) {
 	fis, err := ioutil.ReadDir("testdata")
+
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, fi := range fis {
 		if !strings.HasSuffix(fi.Name(), ".in.md") {
 			continue
 		}
+
 		name := strings.TrimSuffix(fi.Name(), ".in.md")
 		t.Run(name, func(t *testing.T) {
 			got, err := markdown.Process(filepath.Join("testdata", name+".in.md"), nil, nil)
+
 			if err != nil {
 				t.Fatal("markdown.Process:", err)
 			}
+
 			if *updateFlag {
 				err := ioutil.WriteFile(filepath.Join("testdata", name+".golden.md"), got, 0644)
 				if err != nil {
@@ -107,14 +112,17 @@ func Test(t *testing.T) {
 			}
 
 			want, err := ioutil.ReadFile(filepath.Join("testdata", name+".golden.md"))
+
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			diff, err := diff(got, want)
+
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if len(diff) != 0 {
 				t.Errorf("difference of %d lines:\n%s", bytes.Count(diff, []byte("\n")), string(diff))
 			}
@@ -125,16 +133,20 @@ func Test(t *testing.T) {
 // TODO: Factor out.
 func diff(b1, b2 []byte) (data []byte, err error) {
 	f1, err := ioutil.TempFile("", "markdownfmt")
+
 	if err != nil {
 		return
 	}
+
 	defer os.Remove(f1.Name())
 	defer f1.Close()
 
 	f2, err := ioutil.TempFile("", "markdownfmt")
+
 	if err != nil {
 		return
 	}
+
 	defer os.Remove(f2.Name())
 	defer f2.Close()
 
@@ -142,10 +154,12 @@ func diff(b1, b2 []byte) (data []byte, err error) {
 	f2.Write(b2)
 
 	data, err = exec.Command("diff", "-u", f1.Name(), f2.Name()).CombinedOutput()
+
 	if len(data) > 0 {
 		// diff exits with a non-zero status when the files don't match.
 		// Ignore that failure as long as we get output.
 		err = nil
 	}
+
 	return
 }

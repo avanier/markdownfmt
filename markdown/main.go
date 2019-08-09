@@ -11,6 +11,8 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/russross/blackfriday"
 	"github.com/shurcooL/go/indentwriter"
+
+	"github.com/gohugoio/hugo/parser"
 )
 
 type markdownRenderer struct {
@@ -36,10 +38,13 @@ func formatCode(lang string, text []byte) (formattedCode []byte, ok bool) {
 	switch lang {
 	case "Go", "go":
 		gofmt, err := format.Source(text)
+
 		if err != nil {
 			return nil, false
 		}
+
 		return gofmt, true
+
 	default:
 		return nil, false
 	}
@@ -52,21 +57,27 @@ func (*markdownRenderer) BlockCode(out *bytes.Buffer, text []byte, lang string) 
 	// Parse out the language name.
 	count := 0
 	for _, elt := range strings.Fields(lang) {
+
 		if elt[0] == '.' {
 			elt = elt[1:]
 		}
+
 		if len(elt) == 0 {
 			continue
 		}
+
 		out.WriteString("```")
 		out.WriteString(elt)
+
 		count++
+
 		break
 	}
 
 	if count == 0 {
 		out.WriteString("```")
 	}
+
 	out.WriteString("\n")
 
 	if formattedCode, ok := formatCode(lang, text); ok {
@@ -77,28 +88,37 @@ func (*markdownRenderer) BlockCode(out *bytes.Buffer, text []byte, lang string) 
 
 	out.WriteString("```\n")
 }
+
 func (*markdownRenderer) BlockQuote(out *bytes.Buffer, text []byte) {
 	doubleSpace(out)
 	lines := bytes.Split(text, []byte("\n"))
+
 	for i, line := range lines {
+
 		if i == len(lines)-1 {
 			continue
 		}
+
 		out.WriteString(">")
+
 		if len(line) != 0 {
 			out.WriteString(" ")
 			out.Write(line)
 		}
+
 		out.WriteString("\n")
 	}
 }
+
 func (*markdownRenderer) BlockHtml(out *bytes.Buffer, text []byte) {
 	doubleSpace(out)
 	out.Write(text)
 	out.WriteByte('\n')
 }
+
 func (*markdownRenderer) TitleBlock(out *bytes.Buffer, text []byte) {
 }
+
 func (mr *markdownRenderer) Header(out *bytes.Buffer, text func() bool, level int, id string) {
 	marker := out.Len()
 	doubleSpace(out)
@@ -121,26 +141,33 @@ func (mr *markdownRenderer) Header(out *bytes.Buffer, text func() bool, level in
 		len := mr.stringWidth(out.String()[textMarker:])
 		fmt.Fprint(out, "\n", strings.Repeat("-", len))
 	}
+
 	out.WriteString("\n")
 }
+
 func (*markdownRenderer) HRule(out *bytes.Buffer) {
 	doubleSpace(out)
 	out.WriteString("---\n")
 }
+
 func (mr *markdownRenderer) List(out *bytes.Buffer, text func() bool, flags int) {
 	marker := out.Len()
 	doubleSpace(out)
 
 	mr.listDepth++
+
 	defer func() { mr.listDepth-- }()
+
 	if flags&blackfriday.LIST_TYPE_ORDERED != 0 {
 		mr.orderedListCounter[mr.listDepth] = 1
 	}
+
 	if !text() {
 		out.Truncate(marker)
 		return
 	}
 }
+
 func (mr *markdownRenderer) ListItem(out *bytes.Buffer, text []byte, flags int) {
 	if flags&blackfriday.LIST_TYPE_ORDERED != 0 {
 		fmt.Fprintf(out, "%d.", mr.orderedListCounter[mr.listDepth])
@@ -150,14 +177,18 @@ func (mr *markdownRenderer) ListItem(out *bytes.Buffer, text []byte, flags int) 
 		out.WriteString("-")
 		indentwriter.New(out, 1).Write(text)
 	}
+
 	out.WriteString("\n")
+
 	if mr.paragraph[mr.listDepth] {
 		if flags&blackfriday.LIST_ITEM_END_OF_LIST == 0 {
 			out.WriteString("\n")
 		}
+
 		mr.paragraph[mr.listDepth] = false
 	}
 }
+
 func (mr *markdownRenderer) Paragraph(out *bytes.Buffer, text func() bool) {
 	marker := out.Len()
 	doubleSpace(out)
@@ -168,6 +199,7 @@ func (mr *markdownRenderer) Paragraph(out *bytes.Buffer, text func() bool) {
 		out.Truncate(marker)
 		return
 	}
+
 	out.WriteString("\n")
 }
 
@@ -177,49 +209,65 @@ func (mr *markdownRenderer) Table(out *bytes.Buffer, header, body []byte, column
 		out.WriteByte('|')
 		out.WriteByte(' ')
 		out.WriteString(cell)
+
 		for i := mr.stringWidth(cell); i < mr.columnWidths[column]; i++ {
 			out.WriteByte(' ')
 		}
+
 		out.WriteByte(' ')
 	}
+
 	out.WriteString("|\n")
+
 	for column, width := range mr.columnWidths {
 		out.WriteByte('|')
+
 		if mr.columnAligns[column]&blackfriday.TABLE_ALIGNMENT_LEFT != 0 {
 			out.WriteByte(':')
 		} else {
 			out.WriteByte('-')
 		}
+
 		for ; width > 0; width-- {
 			out.WriteByte('-')
 		}
+
 		if mr.columnAligns[column]&blackfriday.TABLE_ALIGNMENT_RIGHT != 0 {
 			out.WriteByte(':')
 		} else {
 			out.WriteByte('-')
 		}
 	}
+
 	out.WriteString("|\n")
+
 	for i := 0; i < len(mr.cells); {
 		for column := range mr.headers {
 			cell := []byte(mr.cells[i])
+
 			i++
+
 			out.WriteByte('|')
 			out.WriteByte(' ')
+
 			switch mr.columnAligns[column] {
 			default:
 				fallthrough
 			case blackfriday.TABLE_ALIGNMENT_LEFT:
 				out.Write(cell)
+
 				for i := mr.stringWidth(string(cell)); i < mr.columnWidths[column]; i++ {
 					out.WriteByte(' ')
 				}
 			case blackfriday.TABLE_ALIGNMENT_CENTER:
 				spaces := mr.columnWidths[column] - mr.stringWidth(string(cell))
+
 				for i := 0; i < spaces/2; i++ {
 					out.WriteByte(' ')
 				}
+
 				out.Write(cell)
+				
 				for i := 0; i < spaces-(spaces/2); i++ {
 					out.WriteByte(' ')
 				}
@@ -227,6 +275,7 @@ func (mr *markdownRenderer) Table(out *bytes.Buffer, header, body []byte, column
 				for i := mr.stringWidth(string(cell)); i < mr.columnWidths[column]; i++ {
 					out.WriteByte(' ')
 				}
+
 				out.Write(cell)
 			}
 			out.WriteByte(' ')
@@ -239,26 +288,32 @@ func (mr *markdownRenderer) Table(out *bytes.Buffer, header, body []byte, column
 	mr.columnWidths = nil
 	mr.cells = nil
 }
+
 func (*markdownRenderer) TableRow(out *bytes.Buffer, text []byte) {
 }
+
 func (mr *markdownRenderer) TableHeaderCell(out *bytes.Buffer, text []byte, align int) {
 	mr.columnAligns = append(mr.columnAligns, align)
 	columnWidth := mr.stringWidth(string(text))
 	mr.columnWidths = append(mr.columnWidths, columnWidth)
 	mr.headers = append(mr.headers, string(text))
 }
+
 func (mr *markdownRenderer) TableCell(out *bytes.Buffer, text []byte, align int) {
 	columnWidth := mr.stringWidth(string(text))
 	column := len(mr.cells) % len(mr.headers)
+
 	if columnWidth > mr.columnWidths[column] {
 		mr.columnWidths[column] = columnWidth
 	}
+
 	mr.cells = append(mr.cells, string(text))
 }
 
 func (*markdownRenderer) Footnotes(out *bytes.Buffer, text func() bool) {
 	out.WriteString("<Footnotes: Not implemented.>") // TODO
 }
+
 func (*markdownRenderer) FootnoteItem(out *bytes.Buffer, name, text []byte, flags int) {
 	out.WriteString("<FootnoteItem: Not implemented.>") // TODO
 }
@@ -267,70 +322,87 @@ func (*markdownRenderer) FootnoteItem(out *bytes.Buffer, name, text []byte, flag
 func (*markdownRenderer) AutoLink(out *bytes.Buffer, link []byte, kind int) {
 	out.Write(escape(link))
 }
+
 func (*markdownRenderer) CodeSpan(out *bytes.Buffer, text []byte) {
 	out.WriteByte('`')
 	out.Write(text)
 	out.WriteByte('`')
 }
+
 func (mr *markdownRenderer) DoubleEmphasis(out *bytes.Buffer, text []byte) {
 	if mr.opt.Terminal {
 		out.WriteString("\x1b[1m") // Bold.
 	}
+
 	out.WriteString("**")
 	out.Write(text)
 	out.WriteString("**")
+
 	if mr.opt.Terminal {
 		out.WriteString("\x1b[0m") // Reset.
 	}
 }
+
 func (*markdownRenderer) Emphasis(out *bytes.Buffer, text []byte) {
 	if len(text) == 0 {
 		return
 	}
+
 	out.WriteByte('*')
 	out.Write(text)
 	out.WriteByte('*')
 }
+
 func (*markdownRenderer) Image(out *bytes.Buffer, link, title, alt []byte) {
 	out.WriteString("![")
 	out.Write(alt)
 	out.WriteString("](")
 	out.Write(escape(link))
+
 	if len(title) != 0 {
 		out.WriteString(` "`)
 		out.Write(title)
 		out.WriteString(`"`)
 	}
+
 	out.WriteString(")")
 }
+
 func (*markdownRenderer) LineBreak(out *bytes.Buffer) {
 	out.WriteString("  \n")
 }
+
 func (*markdownRenderer) Link(out *bytes.Buffer, link, title, content []byte) {
 	out.WriteString("[")
 	out.Write(content)
 	out.WriteString("](")
 	out.Write(escape(link))
+
 	if len(title) != 0 {
 		out.WriteString(` "`)
 		out.Write(title)
 		out.WriteString(`"`)
 	}
+
 	out.WriteString(")")
 }
+
 func (*markdownRenderer) RawHtmlTag(out *bytes.Buffer, tag []byte) {
 	out.Write(tag)
 }
+
 func (*markdownRenderer) TripleEmphasis(out *bytes.Buffer, text []byte) {
 	out.WriteString("***")
 	out.Write(text)
 	out.WriteString("***")
 }
+
 func (*markdownRenderer) StrikeThrough(out *bytes.Buffer, text []byte) {
 	out.WriteString("~~")
 	out.Write(text)
 	out.WriteString("~~")
 }
+
 func (*markdownRenderer) FootnoteRef(out *bytes.Buffer, ref []byte, id int) {
 	out.WriteString("<FootnoteRef: Not implemented.>") // TODO
 }
@@ -346,6 +418,7 @@ func isNumber(data []byte) bool {
 			return false
 		}
 	}
+
 	return len(data) > 0
 }
 
@@ -378,23 +451,32 @@ func needsEscaping(text []byte, lastNormalText string) bool {
 func (*markdownRenderer) Entity(out *bytes.Buffer, entity []byte) {
 	out.Write(entity)
 }
+
 func (mr *markdownRenderer) NormalText(out *bytes.Buffer, text []byte) {
 	normalText := string(text)
+
 	if needsEscaping(text, mr.lastNormalText) {
 		text = append([]byte("\\"), text...)
 	}
+
 	mr.lastNormalText = normalText
+
 	if mr.listDepth > 0 && string(text) == "\n" { // TODO: See if this can be cleaned up... It's needed for lists.
 		return
 	}
+
 	cleanString := cleanWithoutTrim(string(text))
+
 	if cleanString == "" {
 		return
 	}
+
 	if mr.skipSpaceIfNeededNormalText(out, cleanString) { // Skip first space if last character is already a space (i.e., no need for a 2nd space in a row).
 		cleanString = cleanString[1:]
 	}
+
 	out.WriteString(cleanString)
+
 	if len(cleanString) >= 1 && cleanString[len(cleanString)-1] == ' ' { // If it ends with a space, make note of that.
 		mr.normalTextMarker[out] = out.Len()
 	}
@@ -410,9 +492,11 @@ func (mr *markdownRenderer) skipSpaceIfNeededNormalText(out *bytes.Buffer, clean
 	if cleanString[0] != ' ' {
 		return false
 	}
+
 	if _, ok := mr.normalTextMarker[out]; !ok {
 		mr.normalTextMarker[out] = -1
 	}
+
 	return mr.normalTextMarker[out] == out.Len()
 }
 
@@ -458,12 +542,15 @@ func NewRenderer(opt *Options) blackfriday.Renderer {
 
 		stringWidth: runewidth.StringWidth,
 	}
+
 	if opt != nil {
 		mr.opt = *opt
 	}
+
 	if mr.opt.Terminal {
 		mr.stringWidth = terminalStringWidth
 	}
+
 	return mr
 }
 
@@ -479,6 +566,7 @@ type Options struct {
 func Process(filename string, src []byte, opt *Options) ([]byte, error) {
 	// Get source.
 	text, err := readSource(filename, src)
+
 	if err != nil {
 		return nil, err
 	}
@@ -502,5 +590,6 @@ func readSource(filename string, src []byte) ([]byte, error) {
 	if src != nil {
 		return src, nil
 	}
+
 	return ioutil.ReadFile(filename)
 }
